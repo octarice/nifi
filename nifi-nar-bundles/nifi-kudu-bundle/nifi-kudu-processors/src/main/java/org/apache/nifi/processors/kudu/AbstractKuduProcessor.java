@@ -333,6 +333,32 @@ public abstract class AbstractKuduProcessor extends AbstractProcessor {
                         row.addLong(columnIndex,  DataTypeUtils.toLong(value, recordFieldName));
                         break;
                     case UNIXTIME_MICROS:
+                        Long micros = null;
+                        if (value instanceof Number) {
+                            micros = ((Number) value).longValue();
+                        }
+
+                        if (value instanceof String) {
+                            if (((String) value).isEmpty()) {
+                                row.setNull(colName);
+                                break;
+                            }
+                            try {
+                                micros = Long.valueOf(((String) value).trim());
+                            } catch (NumberFormatException e) {}
+                        }
+
+                        if (micros != null) {
+                            long millis = java.util.concurrent.TimeUnit.MICROSECONDS.toMillis(micros);
+                            final Timestamp timestamp = new Timestamp(millis);
+                            long seconds = java.util.concurrent.TimeUnit.MICROSECONDS.toSeconds(micros);
+                            long nanos = java.util.concurrent.TimeUnit.MICROSECONDS.toNanos(micros);
+                            final Long nanosOfSecond = nanos - TimeUnit.SECONDS.toNanos(seconds);
+                            timestamp.setNanos(nanosOfSecond.intValue());
+                            row.addTimestamp(colIdx, timestamp);
+                            break;
+                        }
+
                         DataType fieldType = record.getSchema().getDataType(recordFieldName).get();
                         Timestamp timestamp = DataTypeUtils.toTimestamp(record.getValue(recordFieldName),
                                 () -> DataTypeUtils.getDateFormat(fieldType.getFormat()), recordFieldName);
@@ -361,6 +387,7 @@ public abstract class AbstractKuduProcessor extends AbstractProcessor {
                         break;
                     default:
                         throw new IllegalStateException(String.format("unknown column type %s", colType));
+                    }
                 }
             }
         }
